@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import os.path
+import json
 
 discordWebhook = ''  # Enter your discord webhook.
 filename = 'links_posted.txt'
@@ -8,11 +9,11 @@ filename = 'links_posted.txt'
 # Check and see if file has been created. If not, create it.
 if os.path.isfile(filename):
     # Read the lines.
-    f = open(filename, 'r')
-    lines = f.read()
+    with open(filename, 'r') as f:
+        lines = f.read()
 else:
-    f = open(filename, 'x')
-    lines = []
+    with open(filename, 'x') as f:
+        lines = []
 
 # Get all stories from fortniteinsider.
 r = requests.get(
@@ -25,15 +26,26 @@ for h3 in h3s:
     if 'cheat' in h3.text.lower():
         for a in h3.contents:
             link = a.attrs['href']
-            if link not in lines:
-                # Post to discord.
+            cheat_sheet = requests.get(link)
+            parsed_cheat = BeautifulSoup(cheat_sheet.text, 'html.parser')
+            imgs = parsed_cheat.findAll('img', {'class': 'entry-thumb'})
+            for img in imgs:
+                if "Fortnite-Cheat-Sheet-Map" in img['src']:
+                    cheat_link = img['src']
+            if cheat_link not in lines:
                 data = {
                     "username": "Webhook",
                     "avatar_url": "https://i.imgur.com/4M34hi2.png",
-                    "content": link
                 }
-                discord = requests.post(discordWebhook, data=data)
+                # Get the image
+                file = requests.get(cheat_link).content
+                headers = {}
+                payload = {'payload_json': json.dumps(data)}
+                multipart = {'file': ('cheat_sheet.png', file)}
+
+                # Post to discord.
+                discord = requests.post(discordWebhook, data=payload, headers=headers, files=multipart)
 
                 # Write the link to the file to not post again.
-                f = open(filename, 'a')
-                f.write(link + '\n')
+                with open(filename, 'a') as f:
+                    f.write(link + '\n')
